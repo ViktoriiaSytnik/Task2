@@ -1,0 +1,79 @@
+import requests
+import base64
+from cryptography import x509
+from cryptography.hazmat.primitives.serialization import pkcs7
+
+# URL для загрузки файла
+file_url = 'https://public-api.prozorro.gov.ua/api/2.5/tenders/daeeed3c52df4ce599560ec45bcfa624/documents/25fc19f92f88450d960a03852cfdb485?download=0e207edadb17492eadc7a7c62772b02b'
+
+
+# Функция для загрузки файла
+def download_file(url, filename):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(filename, 'wb') as file:
+            file.write(response.content)
+        print(f"Файл загружен и сохранен как {filename}")
+        return filename
+    else:
+        print(f"Не удалось загрузить файл. Статус-код: {response.status_code}")
+        return None
+
+
+# Функция для декодирования Base64
+def decode_base64(filename):
+    with open(filename, 'rb') as file:
+        base64_data = file.read()
+    decoded_data = base64.b64decode(base64_data)
+    decoded_filename = filename + '_decoded.der'
+    with open(decoded_filename, 'wb') as file:
+        file.write(decoded_data)
+    print(f"Файл декодирован и сохранен как {decoded_filename}")
+    return decoded_filename
+
+
+# Функция для извлечения содержимого PKCS#7
+def extract_pkcs7_content(filename):
+    try:
+        with open(filename, 'rb') as file:
+            pkcs7_data = file.read()
+
+        # Attempt to load the PKCS7 data
+        pkcs7_obj = pkcs7.load_der_pkcs7_certificates(pkcs7_data)
+
+        if pkcs7_obj:
+            print("PKCS7 Certificates:")
+            for cert in pkcs7_obj:
+                print("Certificate Subject:", cert.subject)
+                print("Certificate Issuer:", cert.issuer)
+
+                # Extracting all fields from the subject
+                for attribute in cert.subject:
+                    print(f"{attribute.oid}: {attribute.value}")
+
+            # Extracting the content, if possible
+            content_filename = filename + '_content.der'
+            with open(content_filename, 'wb') as file:
+                file.write(pkcs7_data)
+            print(f"Содержимое PKCS#7 извлечено и сохранено как {content_filename}")
+            return content_filename
+        else:
+            print("The file does not contain valid PKCS7 data.")
+            return None
+
+    except Exception as e:
+        print(f"Ошибка при извлечении данных из PKCS#7: {e}")
+        return None
+
+
+# Главная функция
+def main():
+    filename = 'downloaded_file'
+    downloaded_filename = download_file(file_url, filename)
+    if downloaded_filename:
+        decoded_filename = decode_base64(downloaded_filename)
+        extract_pkcs7_content(decoded_filename)
+
+
+if __name__ == "__main__":
+    main()
